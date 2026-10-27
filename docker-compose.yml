@@ -1,0 +1,12 @@
+services:
+  icloud-mcp:
+    build: .
+    container_name: icloud-mcp
+    restart: unless-stopped
+    env_file: .env
+    # Alleen op de NAS zelf bereikbaar; Caddy zet er HTTPS voor (stap 2).
+    ports:
+      - "127.0.0.1:8765:8000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]

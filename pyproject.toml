@@ -1,0 +1,22 @@
+[project]
+name = "icloud-mcp"
+version = "0.1.0"
+description = "MCP-server voor iCloud (mail, agenda, herinneringen, drive, foto's)"
+requires-python = ">=3.11"
+dependencies = ["mcp>=1.12,<2", "uvicorn>=0.30"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[project.scripts]
+icloud-mcp = "icloud_mcp.server:main"

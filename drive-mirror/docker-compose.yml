@@ -1,0 +1,27 @@
+# Spiegelt iCloud Drive (alleen-lezen kopie) naar een map op de NAS met rclone.
+# Staat los van de iCloud-MCP-server: het Apple-wachtwoord zit alleen hier, niet in de publieke server.
+services:
+  drive-mirror:
+    image: rclone/rclone:1.69.3
+    container_name: icloud-drive-mirror
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/sync.sh"]
+    environment:
+      MIRROR_REMOTE: "icloud:"          # naam van de rclone-remote (zie README)
+      MIRROR_INTERVAL: "3600"           # seconden tussen twee synchronisaties
+      MIRROR_MAX_DELETE: "200"          # veiligheid: stop als er ineens meer verdwijnt
+    volumes:
+      - ./sync.sh:/sync.sh:ro
+      - ./config:/config/rclone         # rclone.conf met wachtwoord en trust-token (chmod 600)
+      - ./data:/data                    # hier komt de kopie van iCloud Drive; wijzig dit pad naar je share
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      # gezond zolang de laatste geslaagde synchronisatie minder dan 26 uur geleden is
+      test: ["CMD-SHELL", "[ -f /data/.mirror-ok ] && [ $(( $(date +%s) - $(date -r /data/.mirror-ok +%s) )) -lt 93600 ]"]
+      interval: 10m
+      timeout: 10s
+      retries: 1
+      start_period: 30m

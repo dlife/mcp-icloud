@@ -1,10 +1,11 @@
 # icloud-mcp
 
-MCP-server voor iCloud, bedoeld om 24/7 op de Synology (Docker) te draaien. Stap 1: Mail.
+MCP-server voor iCloud, bedoeld om 24/7 op de Synology (Docker) te draaien. Mail en Agenda.
 
 ## Tools
 `mail_list_folders`, `mail_search`, `mail_read`, `mail_send`, `mail_mark`, `mail_trash`.
-`mail_send` en `mail_trash` doen niets zonder `confirm=true`; zonder krijg je een voorbeeld terug.
+Agenda: `agenda_list_calendars`, `agenda_list_events`, `agenda_create_event`, `agenda_delete_event` (CalDAV met je Apple-ID en app-specifiek wachtwoord).
+`mail_send`, `mail_trash`, `agenda_create_event` en `agenda_delete_event` doen niets zonder `confirm=true`; zonder krijg je een voorbeeld terug.
 
 ## Draaien op de NAS
 1. Zet deze map op de NAS, bv. in `docker/mcp-icloud`.

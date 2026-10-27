@@ -158,3 +158,36 @@ def test_tokens_survive_restart(fake, tmp_path):
     assert asyncio.run(second.load_access_token(token.access_token)) is not None
     assert "access_token" not in (tmp_path / "oauth.json").read_text()
     assert token.access_token not in (tmp_path / "oauth.json").read_text()
+
+
+class FakeAgenda:
+    def __init__(self):
+        self.created, self.deleted = [], []
+
+    def build_event(self, *args):
+        return "uid-1", "BEGIN:VCALENDAR\r\nEND:VCALENDAR"
+
+    def create_event(self, calendar, **fields):
+        self.created.append((calendar, fields))
+
+    def delete_event(self, uid, calendar):
+        self.deleted.append((uid, calendar))
+
+    def list_calendars(self):
+        return [{"name": "Werk", "url": "x"}]
+
+
+def test_agenda_writes_need_confirmation(tmp_path):
+    fake_agenda = FakeAgenda()
+    config = Config("a@icloud.com", "pw", PUBLIC, PASSWORD, TOKEN, data_dir=str(tmp_path))
+    with TestClient(build_app(config, FakeMail(), fake_agenda)) as c:
+        rpc(c, "initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
+        args = {"calendar": "Werk", "summary": "Lunch", "start": "2026-11-02T12:00"}
+        out = rpc(c, "tools/call", {"name": "agenda_create_event", "arguments": args}, id=2)
+        assert "VOORBEELD" in out["result"]["content"][0]["text"] and fake_agenda.created == []
+        rpc(c, "tools/call", {"name": "agenda_create_event", "arguments": {**args, "confirm": True}}, id=3)
+        assert len(fake_agenda.created) == 1
+        rpc(c, "tools/call", {"name": "agenda_delete_event", "arguments": {"uid": "u", "calendar": "Werk"}}, id=4)
+        assert fake_agenda.deleted == []
+        rpc(c, "tools/call", {"name": "agenda_delete_event", "arguments": {"uid": "u", "calendar": "Werk", "confirm": True}}, id=5)
+        assert fake_agenda.deleted == [("u", "Werk")]

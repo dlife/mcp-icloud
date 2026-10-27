@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.responses import PlainTextResponse
 
+from .agenda import AgendaClient
 from .config import Config
 from .mail import MailClient
 from .oauth import SCOPE, OwnerOAuthProvider, login_routes
@@ -13,8 +14,9 @@ from .oauth import SCOPE, OwnerOAuthProvider, login_routes
 log = logging.getLogger("icloud_mcp")
 
 
-def build_server(config: Config, mail: MailClient | None = None) -> FastMCP:
+def build_server(config: Config, mail: MailClient | None = None, agenda: AgendaClient | None = None) -> FastMCP:
     mail = mail or MailClient(config)
+    agenda = agenda or AgendaClient(config)
     provider = OwnerOAuthProvider(config.data_dir, config.public_url, config.owner_password, config.auth_token)
     # Lokale adressen blijven toegestaan zodat je op de NAS zelf kunt testen.
     local_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
@@ -25,7 +27,7 @@ def build_server(config: Config, mail: MailClient | None = None) -> FastMCP:
     )
     mcp = FastMCP(
         "iCloud",
-        instructions="Toegang tot de iCloud-account van de gebruiker. Mail is beschikbaar; agenda, herinneringen, drive en foto's volgen.",
+        instructions="Toegang tot de iCloud-account van de gebruiker. Mail en agenda zijn beschikbaar; herinneringen, drive en foto's volgen.",
         host=config.host,
         port=config.port,
         stateless_http=True,
@@ -88,12 +90,40 @@ def build_server(config: Config, mail: MailClient | None = None) -> FastMCP:
         mail.move_to_trash(uid, folder)
         return "Naar de prullenmand verplaatst."
 
+    @mcp.tool()
+    def agenda_list_calendars() -> list[dict]:
+        """Geef de agenda's (kalenders) van het iCloud-account."""
+        return agenda.list_calendars()
+
+    @mcp.tool()
+    def agenda_list_events(start: str, end: str, calendar: str = "") -> list[dict]:
+        """Geef afspraken tussen start en einde (ISO, bv. 2026-10-28 of 2026-10-28T09:00; zonder tijdzone geldt de lokale tijd; een datum alleen telt de hele dag mee). Leeg `calendar` doorzoekt alle agenda's. Herhalende afspraken worden uitgeklapt."""
+        return agenda.list_events(start, end, calendar)
+
+    @mcp.tool()
+    def agenda_create_event(calendar: str, summary: str, start: str, end: str = "", location: str = "", description: str = "", all_day: bool = False, confirm: bool = False) -> str:
+        """Maak een afspraak. Zonder end duurt hij 1 uur (of 1 dag bij all_day=true). Zonder confirm=true gebeurt er niets en krijg je een voorbeeld; toon dat aan de gebruiker en roep na akkoord opnieuw aan met confirm=true."""
+        uid, ical = agenda.build_event(summary, start, end, location, description, all_day)
+        if not confirm:
+            return f"VOORBEELD (niet aangemaakt) in {calendar}:\n{ical}\nRoep opnieuw aan met confirm=true na akkoord van de gebruiker."
+        agenda.create_event(calendar, summary=summary, start=start, end=end, location=location, description=description, all_day=all_day)
+        log.info("afspraak aangemaakt in %s", calendar)
+        return "Afspraak aangemaakt."
+
+    @mcp.tool()
+    def agenda_delete_event(uid: str, calendar: str, confirm: bool = False) -> str:
+        """Verwijder een afspraak via zijn uid (uit agenda_list_events). Vereist confirm=true na akkoord van de gebruiker."""
+        if not confirm:
+            return "Niet uitgevoerd: vraag de gebruiker om akkoord en roep opnieuw aan met confirm=true."
+        agenda.delete_event(uid, calendar)
+        return "Afspraak verwijderd."
+
     return mcp
 
 
-def build_app(config: Config, mail: MailClient | None = None):
+def build_app(config: Config, mail: MailClient | None = None, agenda: AgendaClient | None = None):
     """ASGI-app: MCP op /mcp (OAuth), OAuth-endpoints, /login en een open /healthz."""
-    return build_server(config, mail).streamable_http_app()
+    return build_server(config, mail, agenda).streamable_http_app()
 
 
 def main() -> None:

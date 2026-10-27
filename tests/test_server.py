@@ -191,3 +191,13 @@ def test_agenda_writes_need_confirmation(tmp_path):
         assert fake_agenda.deleted == []
         rpc(c, "tools/call", {"name": "agenda_delete_event", "arguments": {"uid": "u", "calendar": "Werk", "confirm": True}}, id=5)
         assert fake_agenda.deleted == [("u", "Werk")]
+
+
+def test_audit_log_never_contains_arguments(client, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="icloud_mcp")
+    rpc(client, "initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
+    rpc(client, "tools/call", {"name": "mail_send", "arguments": {"to": "geheim@voorbeeld.be", "subject": "GEHEIMONDERWERP", "body": "x"}}, id=2)
+    assert "tool mail_send ok" in caplog.text
+    assert "geheim@voorbeeld.be" not in caplog.text and "GEHEIMONDERWERP" not in caplog.text

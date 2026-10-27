@@ -1,4 +1,7 @@
+import functools
 import logging
+import os
+import time
 
 import uvicorn
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
@@ -12,6 +15,23 @@ from .mail import MailClient
 from .oauth import SCOPE, OwnerOAuthProvider, login_routes
 
 log = logging.getLogger("icloud_mcp")
+
+
+def audited(fn):
+    """Logt alleen toolnaam, duur en uitkomst; nooit argumenten of inhoud van mail of afspraken."""
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        started = time.monotonic()
+        try:
+            result = fn(*args, **kwargs)
+        except Exception as exc:
+            log.warning("tool %s mislukt (%s) na %.2fs", fn.__name__, type(exc).__name__, time.monotonic() - started)
+            raise
+        log.info("tool %s ok in %.2fs", fn.__name__, time.monotonic() - started)
+        return result
+
+    return wrapper
 
 
 def build_server(config: Config, mail: MailClient | None = None, agenda: AgendaClient | None = None) -> FastMCP:
@@ -52,37 +72,42 @@ def build_server(config: Config, mail: MailClient | None = None, agenda: AgendaC
         return PlainTextResponse("ok")
 
     @mcp.tool()
+    @audited
     def mail_list_folders() -> list[str]:
         """Geef alle mailmappen van het iCloud-account."""
         return mail.list_folders()
 
     @mcp.tool()
+    @audited
     def mail_search(folder: str = "INBOX", query: str = "ALL", limit: int = 20) -> list[dict]:
         """Zoek mails in een map, nieuwste eerst. `query` is een IMAP-zoekopdracht, bv. UNSEEN, FROM "jan", SUBJECT "factuur", SINCE 01-Oct-2026. Max 100 resultaten."""
         return mail.search(folder, query, limit)
 
     @mcp.tool()
+    @audited
     def mail_read(uid: str, folder: str = "INBOX") -> dict:
         """Lees één mail (afzender, onderwerp, tekst, namen van bijlagen). Markeert de mail niet als gelezen."""
         return mail.read(uid, folder)
 
     @mcp.tool()
+    @audited
     def mail_send(to: str, subject: str, body: str, cc: str = "", reply_to_uid: str = "", folder: str = "INBOX", confirm: bool = False) -> str:
         """Verstuur een mail. Zonder confirm=true gebeurt er niets en krijg je alleen een voorbeeld; toon dat aan de gebruiker en vraag akkoord voordat je opnieuw aanroept met confirm=true. Met reply_to_uid wordt het een antwoord op dat bericht."""
         msg = mail.build_message(to, subject, body, cc, reply_to_uid, folder)
         if not confirm:
             return f"VOORBEELD (niet verstuurd)\nAan: {to}\nCc: {cc}\nOnderwerp: {subject}\n\n{body}\n\nRoep opnieuw aan met confirm=true na akkoord van de gebruiker."
         mail.send(msg)
-        log.info("mail verstuurd naar %s", to)
         return f"Verstuurd naar {to}."
 
     @mcp.tool()
+    @audited
     def mail_mark(uid: str, read: bool = True, folder: str = "INBOX") -> str:
         """Markeer een mail als gelezen (read=true) of ongelezen (read=false)."""
         mail.set_flag(uid, folder, "\\Seen", read)
         return "Bijgewerkt."
 
     @mcp.tool()
+    @audited
     def mail_trash(uid: str, folder: str = "INBOX", confirm: bool = False) -> str:
         """Verplaats een mail naar de prullenmand. Vereist confirm=true na akkoord van de gebruiker."""
         if not confirm:
@@ -91,26 +116,29 @@ def build_server(config: Config, mail: MailClient | None = None, agenda: AgendaC
         return "Naar de prullenmand verplaatst."
 
     @mcp.tool()
+    @audited
     def agenda_list_calendars() -> list[dict]:
         """Geef de agenda's (kalenders) van het iCloud-account."""
         return agenda.list_calendars()
 
     @mcp.tool()
+    @audited
     def agenda_list_events(start: str, end: str, calendar: str = "") -> list[dict]:
         """Geef afspraken tussen start en einde (ISO, bv. 2026-10-28 of 2026-10-28T09:00; zonder tijdzone geldt de lokale tijd; een datum alleen telt de hele dag mee). Leeg `calendar` doorzoekt alle agenda's. Herhalende afspraken worden uitgeklapt."""
         return agenda.list_events(start, end, calendar)
 
     @mcp.tool()
+    @audited
     def agenda_create_event(calendar: str, summary: str, start: str, end: str = "", location: str = "", description: str = "", all_day: bool = False, confirm: bool = False) -> str:
         """Maak een afspraak. Zonder end duurt hij 1 uur (of 1 dag bij all_day=true). Zonder confirm=true gebeurt er niets en krijg je een voorbeeld; toon dat aan de gebruiker en roep na akkoord opnieuw aan met confirm=true."""
         uid, ical = agenda.build_event(summary, start, end, location, description, all_day)
         if not confirm:
             return f"VOORBEELD (niet aangemaakt) in {calendar}:\n{ical}\nRoep opnieuw aan met confirm=true na akkoord van de gebruiker."
         agenda.create_event(calendar, summary=summary, start=start, end=end, location=location, description=description, all_day=all_day)
-        log.info("afspraak aangemaakt in %s", calendar)
         return "Afspraak aangemaakt."
 
     @mcp.tool()
+    @audited
     def agenda_delete_event(uid: str, calendar: str, confirm: bool = False) -> str:
         """Verwijder een afspraak via zijn uid (uit agenda_list_events). Vereist confirm=true na akkoord van de gebruiker."""
         if not confirm:
@@ -127,7 +155,7 @@ def build_app(config: Config, mail: MailClient | None = None, agenda: AgendaClie
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     config = Config.from_env()
     uvicorn.run(build_app(config), host=config.host, port=config.port, log_level="info")
 

@@ -20,7 +20,7 @@ class MailClient:
     def _imap(self):
         conn = imaplib.IMAP4_SSL(self.config.imap_host, self.config.imap_port)
         try:
-            conn.login(self.config.apple_id, self.config.app_password)
+            conn.login(self.config.mail_login, self.config.app_password)
             yield conn
         finally:
             try:
@@ -147,13 +147,13 @@ class MailClient:
 
     def build_message(self, to: str, subject: str, body: str, cc: str = "", reply_to_uid: str = "", folder: str = "INBOX") -> EmailMessage:
         msg = EmailMessage()
-        msg["From"] = self.config.apple_id
+        msg["From"] = self.config.from_address
         msg["To"] = to
         if cc:
             msg["Cc"] = cc
         msg["Subject"] = subject
         msg["Date"] = formatdate(localtime=True)
-        msg["Message-ID"] = make_msgid(domain=self.config.apple_id.split("@")[-1])
+        msg["Message-ID"] = make_msgid(domain=self.config.from_address.split("@")[-1])
         if reply_to_uid:
             original = self.read(reply_to_uid, folder)
             if original["message_id"]:
@@ -166,5 +166,5 @@ class MailClient:
         recipients = [a for field in ("To", "Cc") if msg[field] for a in msg[field].split(",")]
         with smtplib.SMTP(self.config.smtp_host, self.config.smtp_port, timeout=30) as smtp:
             smtp.starttls()
-            smtp.login(self.config.apple_id, self.config.app_password)
+            smtp.login(self.config.mail_login, self.config.app_password)
             smtp.send_message(msg, to_addrs=[a.strip() for a in recipients])

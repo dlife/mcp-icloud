@@ -10,6 +10,9 @@ class Config:
     owner_password: str
     auth_token: str = ""
     data_dir: str = "/data"
+    # Het iCloud-mailadres kan afwijken van het Apple-ID (bv. Apple-ID is een Gmail-adres).
+    mail_address: str = ""
+    mail_user: str = ""
     imap_host: str = "imap.mail.me.com"
     imap_port: int = 993
     smtp_host: str = "smtp.mail.me.com"
@@ -17,6 +20,15 @@ class Config:
     allowed_hosts: tuple[str, ...] = ()
     host: str = "0.0.0.0"
     port: int = 8000
+
+    @property
+    def from_address(self) -> str:
+        return self.mail_address or self.apple_id
+
+    @property
+    def mail_login(self) -> str:
+        """Gebruikersnaam voor IMAP/SMTP: standaard het volledige mailadres."""
+        return self.mail_user or self.from_address
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -41,6 +53,8 @@ class Config:
             owner_password=password,
             auth_token=token,
             data_dir=os.environ.get("MCP_DATA_DIR", "/data"),
+            mail_address=os.environ.get("ICLOUD_MAIL_ADDRESS", "").strip(),
+            mail_user=os.environ.get("ICLOUD_MAIL_USER", "").strip(),
             allowed_hosts=hosts,
             host=os.environ.get("MCP_HOST", "0.0.0.0"),
             port=int(os.environ.get("MCP_PORT", "8000")),

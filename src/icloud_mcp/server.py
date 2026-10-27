@@ -14,10 +14,12 @@ log = logging.getLogger("icloud_mcp")
 
 def build_server(config: Config, mail: MailClient | None = None) -> FastMCP:
     mail = mail or MailClient(config)
+    # Lokale adressen blijven toegestaan zodat je op de NAS zelf kunt testen.
+    local_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
     security = TransportSecuritySettings(
         enable_dns_rebinding_protection=bool(config.allowed_hosts),
-        allowed_hosts=list(config.allowed_hosts),
-        allowed_origins=[f"https://{h}" for h in config.allowed_hosts],
+        allowed_hosts=[*config.allowed_hosts, *local_hosts],
+        allowed_origins=[*(f"https://{h}" for h in config.allowed_hosts), "http://127.0.0.1:*", "http://localhost:*"],
     )
     mcp = FastMCP(
         "iCloud",

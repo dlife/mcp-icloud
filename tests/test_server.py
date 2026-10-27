@@ -85,3 +85,12 @@ def test_trash_needs_confirmation(client, fake):
     assert fake.trashed == []
     rpc(client, "tools/call", {"name": "mail_trash", "arguments": {"uid": "5", "confirm": True}}, id=3)
     assert fake.trashed == [("5", "INBOX")]
+
+
+def test_allowed_hosts_still_accept_localhost_and_reject_others(fake):
+    config = Config("a@icloud.com", "pw", TOKEN, allowed_hosts=("icloud.example.com",))
+    init = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}}
+    with TestClient(build_app(config, fake)) as c:
+        for host, status in [("127.0.0.1:8765", 200), ("icloud.example.com", 200), ("evil.example", 421)]:
+            resp = c.post("/mcp", headers={**HEADERS, "Host": host}, json=init)
+            assert resp.status_code == status, (host, resp.status_code, resp.text)

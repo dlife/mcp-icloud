@@ -52,7 +52,7 @@ class FakeIMAP:
 def client(monkeypatch):
     fake = FakeIMAP()
     monkeypatch.setattr(mail_module.imaplib, "IMAP4_SSL", lambda *a: fake)
-    c = MailClient(Config("a@icloud.com", "pw", "t" * 40))
+    c = MailClient(Config("a@icloud.com", "pw", "https://icloud.example.com", "een-lang-wachtwoord"))
     c.fake = fake
     return c
 

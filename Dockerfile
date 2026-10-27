@@ -3,7 +3,7 @@ ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY pyproject.toml ./
 COPY src ./src
-RUN pip install . && useradd -r -u 10001 app
+RUN pip install . && useradd -r -u 10001 app && mkdir /data && chown app /data
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

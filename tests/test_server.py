@@ -1,4 +1,7 @@
+import base64
+import hashlib
 import json
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from starlette.testclient import TestClient
@@ -7,6 +10,8 @@ from icloud_mcp.config import Config
 from icloud_mcp.server import build_app
 
 TOKEN = "t" * 40
+PUBLIC = "https://icloud.example.com"
+PASSWORD = "een-lang-wachtwoord"
 HEADERS = {
     "Authorization": f"Bearer {TOKEN}",
     "Accept": "application/json, text/event-stream",
@@ -38,8 +43,8 @@ def fake():
 
 
 @pytest.fixture
-def client(fake):
-    config = Config("a@icloud.com", "pw", TOKEN)
+def client(fake, tmp_path):
+    config = Config("a@icloud.com", "pw", PUBLIC, PASSWORD, TOKEN, data_dir=str(tmp_path))
     with TestClient(build_app(config, fake)) as c:
         yield c
 
@@ -87,10 +92,69 @@ def test_trash_needs_confirmation(client, fake):
     assert fake.trashed == [("5", "INBOX")]
 
 
-def test_allowed_hosts_still_accept_localhost_and_reject_others(fake):
-    config = Config("a@icloud.com", "pw", TOKEN, allowed_hosts=("icloud.example.com",))
+def test_allowed_hosts_still_accept_localhost_and_reject_others(fake, tmp_path):
+    config = Config("a@icloud.com", "pw", PUBLIC, PASSWORD, TOKEN, data_dir=str(tmp_path), allowed_hosts=("icloud.example.com",))
     init = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}}
     with TestClient(build_app(config, fake)) as c:
         for host, status in [("127.0.0.1:8765", 200), ("icloud.example.com", 200), ("evil.example", 421)]:
             resp = c.post("/mcp", headers={**HEADERS, "Host": host}, json=init)
             assert resp.status_code == status, (host, resp.status_code, resp.text)
+
+
+def test_full_oauth_flow(client):
+    redirect = "https://claude.ai/api/mcp/auth_callback"
+    reg = client.post("/register", json={"redirect_uris": [redirect], "client_name": "Claude", "token_endpoint_auth_method": "none", "grant_types": ["authorization_code", "refresh_token"], "response_types": ["code"]})
+    assert reg.status_code == 201, reg.text
+    client_id = reg.json()["client_id"]
+
+    verifier = "v" * 60
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    auth = client.get("/authorize", params={"response_type": "code", "client_id": client_id, "redirect_uri": redirect, "code_challenge": challenge, "code_challenge_method": "S256", "state": "xyz", "scope": "icloud"}, follow_redirects=False)
+    assert auth.status_code == 302, auth.text
+    login_url = auth.headers["location"]
+    assert login_url.startswith(PUBLIC + "/login?req=")
+    req_id = parse_qs(urlparse(login_url).query)["req"][0]
+
+    assert "Claude" in client.get("/login", params={"req": req_id}).text
+    bad = client.post("/login", data={"req": req_id, "password": "fout"}, follow_redirects=False)
+    assert bad.status_code == 401
+    ok = client.post("/login", data={"req": req_id, "password": PASSWORD}, follow_redirects=False)
+    assert ok.status_code == 303
+    query = parse_qs(urlparse(ok.headers["location"]).query)
+    assert query["state"] == ["xyz"]
+
+    tok = client.post("/token", data={"grant_type": "authorization_code", "code": query["code"][0], "redirect_uri": redirect, "client_id": client_id, "code_verifier": verifier})
+    assert tok.status_code == 200, tok.text
+    access, refresh = tok.json()["access_token"], tok.json()["refresh_token"]
+
+    headers = {**HEADERS, "Authorization": f"Bearer {access}"}
+    init = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}}
+    assert client.post("/mcp", headers=headers, json=init).status_code == 200
+
+    new = client.post("/token", data={"grant_type": "refresh_token", "refresh_token": refresh, "client_id": client_id})
+    assert new.status_code == 200 and new.json()["access_token"] != access
+    assert client.post("/token", data={"grant_type": "refresh_token", "refresh_token": refresh, "client_id": client_id}).status_code == 400
+
+
+def test_login_locks_out_after_repeated_failures(client):
+    reg = client.post("/register", json={"redirect_uris": ["https://claude.ai/cb"], "token_endpoint_auth_method": "none"}).json()
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(b"x" * 60).digest()).rstrip(b"=").decode()
+    for _ in range(5):
+        auth = client.get("/authorize", params={"response_type": "code", "client_id": reg["client_id"], "redirect_uri": "https://claude.ai/cb", "code_challenge": challenge, "code_challenge_method": "S256"}, follow_redirects=False)
+        req_id = parse_qs(urlparse(auth.headers["location"]).query)["req"][0]
+        client.post("/login", data={"req": req_id, "password": "fout"})
+    resp = client.post("/login", data={"req": req_id, "password": PASSWORD})
+    assert resp.status_code == 429
+
+
+def test_tokens_survive_restart(fake, tmp_path):
+    config = Config("a@icloud.com", "pw", PUBLIC, PASSWORD, TOKEN, data_dir=str(tmp_path))
+    from icloud_mcp.oauth import OwnerOAuthProvider
+    import asyncio
+
+    first = OwnerOAuthProvider(str(tmp_path), PUBLIC, PASSWORD)
+    token = first._issue_tokens("c1", ["icloud"], None)
+    second = OwnerOAuthProvider(str(tmp_path), PUBLIC, PASSWORD)
+    assert asyncio.run(second.load_access_token(token.access_token)) is not None
+    assert "access_token" not in (tmp_path / "oauth.json").read_text()
+    assert token.access_token not in (tmp_path / "oauth.json").read_text()

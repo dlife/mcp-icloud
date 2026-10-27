@@ -1,19 +1,21 @@
-import hmac
 import logging
 
 import uvicorn
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import PlainTextResponse
 
 from .config import Config
 from .mail import MailClient
+from .oauth import SCOPE, OwnerOAuthProvider, login_routes
 
 log = logging.getLogger("icloud_mcp")
 
 
 def build_server(config: Config, mail: MailClient | None = None) -> FastMCP:
     mail = mail or MailClient(config)
+    provider = OwnerOAuthProvider(config.data_dir, config.public_url, config.owner_password, config.auth_token)
     # Lokale adressen blijven toegestaan zodat je op de NAS zelf kunt testen.
     local_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
     security = TransportSecuritySettings(
@@ -28,7 +30,20 @@ def build_server(config: Config, mail: MailClient | None = None) -> FastMCP:
         port=config.port,
         stateless_http=True,
         transport_security=security,
+        auth_server_provider=provider,
+        auth=AuthSettings(
+            issuer_url=config.public_url,
+            resource_server_url=f"{config.public_url}/mcp",
+            required_scopes=[SCOPE],
+            validate_token_resource=False,  # één resource; tokens worden niet per resource uitgegeven
+            client_registration_options=ClientRegistrationOptions(enabled=True, valid_scopes=[SCOPE], default_scopes=[SCOPE]),
+            revocation_options=RevocationOptions(enabled=True),
+        ),
     )
+
+    get_login, post_login = login_routes(provider)
+    mcp.custom_route("/login", methods=["GET"])(get_login)
+    mcp.custom_route("/login", methods=["POST"])(post_login)
 
     @mcp.custom_route("/healthz", methods=["GET"])
     async def healthz(request):
@@ -77,23 +92,8 @@ def build_server(config: Config, mail: MailClient | None = None) -> FastMCP:
 
 
 def build_app(config: Config, mail: MailClient | None = None):
-    """Starlette-app met bearer-token voor het MCP-endpoint en een open /healthz."""
-    app = build_server(config, mail).streamable_http_app()
-    expected = config.auth_token.encode()
-
-    inner = app
-
-    async def guarded(scope, receive, send):
-        if scope["type"] == "http" and scope["path"] != "/healthz":
-            header = dict(scope["headers"]).get(b"authorization", b"")
-            scheme, _, token = header.partition(b" ")
-            if scheme.lower() != b"bearer" or not hmac.compare_digest(token, expected):
-                response = JSONResponse({"error": "unauthorized"}, status_code=401, headers={"WWW-Authenticate": "Bearer"})
-                await response(scope, receive, send)
-                return
-        await inner(scope, receive, send)
-
-    return guarded
+    """ASGI-app: MCP op /mcp (OAuth), OAuth-endpoints, /login en een open /healthz."""
+    return build_server(config, mail).streamable_http_app()
 
 
 def main() -> None:

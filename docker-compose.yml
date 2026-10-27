@@ -4,9 +4,21 @@ services:
     container_name: icloud-mcp
     restart: unless-stopped
     env_file: .env
-    # Alleen op de NAS zelf bereikbaar; Caddy zet er HTTPS voor (stap 2).
+    # Alleen op de NAS zelf bereikbaar; Caddy zet er HTTPS voor (zie README).
     ports:
       - "127.0.0.1:8765:8000"
+    volumes:
+      - icloud-mcp-data:/data   # OAuth-tokens, overleven een herstart
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    # Draait Caddy in een eigen Docker-netwerk? Haal dan de commentaartekens weg
+    # en vervang 'caddy-net' door de naam van dat netwerk; Caddy wijst dan naar icloud-mcp:8000.
+    # networks: [default, caddy-net]
+
+volumes:
+  icloud-mcp-data:
+
+# networks:
+#   caddy-net:
+#     external: true

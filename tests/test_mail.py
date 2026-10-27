@@ -88,3 +88,18 @@ def test_trash_copies_then_expunges(client):
     client.move_to_trash("1")
     kinds = [c[0] for c in client.fake.calls]
     assert kinds.index("COPY") < kinds.index("STORE") < kinds.index("expunge")
+
+
+def test_login_uses_mail_address_not_apple_id(monkeypatch):
+    logins = []
+
+    class Recorder(FakeIMAP):
+        def login(self, user, password):
+            logins.append(user)
+
+    monkeypatch.setattr(mail_module.imaplib, "IMAP4_SSL", lambda *a: Recorder())
+    config = Config("dieter@gmail.com", "pw", "https://x.example", "een-lang-wachtwoord", mail_address="dieter@icloud.com")
+    client = MailClient(config)
+    client.list_folders()
+    assert logins == ["dieter@icloud.com"]
+    assert client.build_message("a@b.be", "s", "b")["From"] == "dieter@icloud.com"

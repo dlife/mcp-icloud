@@ -3,7 +3,8 @@ name = "icloud-mcp"
 version = "0.1.0"
 description = "MCP-server voor iCloud (mail, agenda, herinneringen, drive, foto's)"
 requires-python = ">=3.11"
-dependencies = ["mcp>=1.12,<2", "uvicorn>=0.30", "caldav>=2.0", "icalendar>=6.0"]
+dependencies = ["mcp>=1.12,<2", "uvicorn>=0.30", "caldav>=2.0", "icalendar>=6.0",
+    "pymupdf>=1.24", "python-docx>=1.1", "openpyxl>=3.1", "python-pptx>=1.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

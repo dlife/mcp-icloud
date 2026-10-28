@@ -6,7 +6,9 @@ Wat er bewust **niet** in zit: Herinneringen (Structured doet dat), Foto's (Syno
 (geen officiële API en geen app-specifiek wachtwoord; de pc kopieert de map met `robocopy` naar een NAS-share).
 
 ## Tools
-`mail_list_folders`, `mail_search`, `mail_read`, `mail_send`, `mail_mark`, `mail_trash`.
+`mail_list_folders`, `mail_search`, `mail_read`, `mail_attachment`, `mail_send`, `mail_mark`, `mail_trash`.
+
+`mail_read` toont per bijlage een `index`; `mail_attachment` haalt daarmee de tekst uit PDF, Word, Excel, PowerPoint en tekstbestanden (alleen lezen, in het geheugen, niets op schijf). Scans en afbeeldingen geven een uitleg in `note`; OCR volgt later. Grenzen via `MCP_MAX_ATTACHMENT_MB` (standaard 15) en `MCP_MAX_ATTACHMENT_CHARS` (standaard 50000).
 Agenda: `agenda_list_calendars`, `agenda_list_events`, `agenda_create_event`, `agenda_delete_event` (CalDAV met je Apple-ID en app-specifiek wachtwoord).
 `mail_send`, `mail_trash`, `agenda_create_event` en `agenda_delete_event` doen niets zonder `confirm=true`; zonder krijg je een voorbeeld terug.
 

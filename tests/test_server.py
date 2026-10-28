@@ -36,6 +36,9 @@ class FakeMail:
     def move_to_trash(self, uid, folder):
         self.trashed.append((uid, folder))
 
+    def get_attachment(self, uid, index, folder):
+        return "n.txt", "text/plain", b"x" * 100
+
 
 @pytest.fixture
 def fake():
@@ -71,7 +74,7 @@ def test_mcp_requires_token(client):
 def test_lists_mail_tools(client):
     rpc(client, "initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
     names = {t["name"] for t in rpc(client, "tools/list", id=2)["result"]["tools"]}
-    assert {"mail_list_folders", "mail_search", "mail_read", "mail_send", "mail_mark", "mail_trash"} <= names
+    assert {"mail_list_folders", "mail_search", "mail_read", "mail_send", "mail_mark", "mail_trash", "mail_attachment"} <= names
 
 
 def test_send_needs_confirmation(client, fake):
@@ -90,6 +93,17 @@ def test_trash_needs_confirmation(client, fake):
     assert fake.trashed == []
     rpc(client, "tools/call", {"name": "mail_trash", "arguments": {"uid": "5", "confirm": True}}, id=3)
     assert fake.trashed == [("5", "INBOX")]
+
+
+def test_attachment_tool_reads_text_and_respects_limits(fake, tmp_path):
+    init = ("initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
+    call = {"name": "mail_attachment", "arguments": {"uid": "1", "index": 0}}
+    for limits, expected in [({}, "xxxx"), ({"max_attachment_chars": 10}, '"truncated": true'), ({"max_attachment_bytes": 50}, "te groot"), ({"max_attachment_bytes": 0}, "staat uit")]:
+        config = Config("a@icloud.com", "pw", PUBLIC, PASSWORD, TOKEN, data_dir=str(tmp_path), **limits)
+        with TestClient(build_app(config, fake)) as c:
+            rpc(c, *init)
+            text = rpc(c, "tools/call", {**call}, id=2)["result"]["content"][0]["text"]
+            assert expected in text, (limits, text)
 
 
 def test_allowed_hosts_still_accept_localhost_and_reject_others(fake, tmp_path):

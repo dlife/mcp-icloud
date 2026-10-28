@@ -90,7 +90,11 @@ class MailClient:
             if status != "OK" or not msg_data or not isinstance(msg_data[0], tuple):
                 raise RuntimeError(f"Bericht {uid} niet gevonden in {folder}")
             msg = email.message_from_bytes(msg_data[0][1])
-            body, attachments = self._extract(msg)
+            body, _ = self._extract(msg)
+            attachments = [
+                {"index": i, "name": name, "type": part.get_content_type(), "size": len(part.get_payload(decode=True) or b"")}
+                for i, (name, part) in enumerate(self._attachment_parts(msg))
+            ]
             return {
                 "uid": uid,
                 "from": self._decode(msg["From"]),
@@ -103,6 +107,33 @@ class MailClient:
                 "truncated": len(body) > MAX_BODY_CHARS,
                 "attachments": attachments,
             }
+
+    @staticmethod
+    def _attachment_parts(msg: email.message.Message) -> list[tuple[str, email.message.Message]]:
+        """Bijlagen in vaste volgorde als (naam, onderdeel); de positie is het `index` voor get_attachment."""
+        found = []
+        for part in msg.walk():
+            if part.is_multipart():
+                continue
+            filename = part.get_filename()
+            if filename or part.get_content_disposition() == "attachment":
+                found.append((MailClient._decode(filename) or "naamloos", part))
+        return found
+
+    def get_attachment(self, uid: str, index: int, folder: str = "INBOX") -> tuple[str, str, bytes]:
+        """Geef (naam, mime-type, bytes) van bijlage `index`. Haalt de mail op zonder die als gelezen te markeren."""
+        with self._imap() as conn:
+            status, _ = conn.select(self._quote(folder), readonly=True)
+            if status != "OK":
+                raise RuntimeError(f"Map niet gevonden: {folder}")
+            status, msg_data = conn.uid("FETCH", uid, "(BODY.PEEK[])")
+            if status != "OK" or not msg_data or not isinstance(msg_data[0], tuple):
+                raise RuntimeError(f"Bericht {uid} niet gevonden in {folder}")
+            parts = self._attachment_parts(email.message_from_bytes(msg_data[0][1]))
+            if not 0 <= index < len(parts):
+                raise RuntimeError(f"Bijlage {index} bestaat niet (deze mail heeft {len(parts)} bijlage(n))")
+            name, part = parts[index]
+            return name, part.get_content_type(), part.get_payload(decode=True) or b""
 
     @staticmethod
     def _extract(msg: email.message.Message) -> tuple[str, list[str]]:

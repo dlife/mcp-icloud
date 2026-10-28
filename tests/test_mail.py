@@ -70,8 +70,14 @@ def test_search_newest_first_with_limit(client):
 def test_read_decodes_and_lists_attachments(client):
     msg = client.read("1")
     assert msg["body"].strip() == "Hallo wereld"
-    assert msg["attachments"] == ["f.pdf"]
+    assert msg["attachments"] == [{"index": 0, "name": "f.pdf", "type": "application/pdf", "size": 4}]
     assert "Jérôme" in msg["from"]
+
+
+def test_get_attachment_returns_bytes_and_checks_index(client):
+    assert client.get_attachment("1", 0) == ("f.pdf", "application/pdf", b"data")
+    with pytest.raises(RuntimeError, match="1 bijlage"):
+        client.get_attachment("1", 5)
 
 
 def test_unknown_folder_raises(client):

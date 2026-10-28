@@ -22,6 +22,8 @@ class Config:
     allowed_hosts: tuple[str, ...] = ()
     host: str = "0.0.0.0"
     port: int = 8000
+    max_attachment_bytes: int = 15 * 1024 * 1024
+    max_attachment_chars: int = 50_000
 
     @property
     def from_address(self) -> str:
@@ -61,4 +63,6 @@ class Config:
             allowed_hosts=hosts,
             host=os.environ.get("MCP_HOST", "0.0.0.0"),
             port=int(os.environ.get("MCP_PORT", "8000")),
+            max_attachment_bytes=int(os.environ.get("MCP_MAX_ATTACHMENT_MB", "15")) * 1024 * 1024,
+            max_attachment_chars=int(os.environ.get("MCP_MAX_ATTACHMENT_CHARS", "50000")),
         )

@@ -18,11 +18,22 @@ Versturen en verwijderen vragen ook voor Gmail `confirm=true`. Het app-wachtwoor
 Agenda: `agenda_list_calendars`, `agenda_list_events`, `agenda_create_event`, `agenda_delete_event` (CalDAV met je Apple-ID en app-specifiek wachtwoord).
 `mail_send`, `mail_trash`, `agenda_create_event` en `agenda_delete_event` doen niets zonder `confirm=true`; zonder krijg je een voorbeeld terug.
 
-## Draaien op de NAS
-1. Zet deze map op de NAS, bv. in `docker/mcp-icloud`.
-2. `cp .env.example .env && chmod 600 .env`, vul in.
-3. Container Manager: Project, Aanmaken, kies de map en start. Of via SSH: `sudo docker compose up -d --build`.
-4. Test op de NAS: `curl http://127.0.0.1:8765/healthz` geeft `ok`; `/mcp` zonder aanmelding geeft 401.
+## Snel starten
+Je hebt nodig: een machine die 24/7 aanstaat met Docker (NAS, Raspberry Pi, kleine server), een eigen domeinnaam, en een iCloud-account met een [app-specifiek wachtwoord](https://account.apple.com).
+
+```
+git clone https://github.com/dlife/mcp-icloud && cd mcp-icloud
+./setup.sh          # Engels: ./setup.sh --lang en
+docker compose up -d --build
+```
+
+`setup.sh` heeft alleen Docker nodig. De wizard vraagt je Apple-ID, het iCloud-mailadres, het app-specifieke wachtwoord (met uitleg waar je dat maakt), optioneel Gmail en het publieke adres. Hij **test de logins** (Mail, Agenda, Gmail), maakt een sterk aanmeldwachtwoord voor Claude aan en schrijft `.env` (alleen leesbaar voor jou). Daarna volg je de volgende stappen die hij toont: reverse proxy en connector in Claude.
+
+Liever met de hand? `cp .env.example .env`, vul in en start met `docker compose up -d --build`.
+Test op de machine zelf: `curl http://127.0.0.1:8765/healthz` geeft `ok`; `/mcp` zonder aanmelding geeft 401.
+Op een Synology kan het ook via Container Manager, Project, Aanmaken.
+
+English: see [README.en.md](README.en.md).
 
 ## Publiek bereikbaar maken
 Zet een reverse proxy met HTTPS voor `127.0.0.1:8765` (of poort 8000 van de container).
@@ -52,7 +63,7 @@ Na een wijziging in `.env` is `sudo docker compose up -d --force-recreate` genoe
 Nieuwe tools verschijnen in Claude pas na een nieuw gesprek, of na de connector uit en aan te zetten.
 
 ## Instellingen in `.env`
-Zie `.env.example`. Het Apple-ID (voor de Agenda) en het mailadres van iCloud Mail kunnen verschillen: zet dan het iCloud-adres in `ICLOUD_MAIL_ADDRESS`.
+Zie `.env.example` (met uitleg per variabele); `./setup.sh` maakt het bestand voor je. Het Apple-ID (voor de Agenda) en het mailadres van iCloud Mail kunnen verschillen: zet dan het iCloud-adres in `ICLOUD_MAIL_ADDRESS`.
 `LOG_LEVEL` (standaard `INFO`) stelt het logboek in.
 
 ## Logboek

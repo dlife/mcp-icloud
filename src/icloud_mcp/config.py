@@ -3,6 +3,22 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class MailAccount:
+    """Verbindingsgegevens van één mailaccount (IMAP + SMTP)."""
+    name: str
+    login: str
+    password: str
+    address: str
+    imap_host: str
+    imap_port: int
+    smtp_host: str
+    smtp_port: int
+    trash: str
+    # Gmail kent eigen zoeksyntax (X-GM-RAW) en bewaart verzonden mail zelf.
+    gmail: bool = False
+
+
+@dataclass(frozen=True)
 class Config:
     apple_id: str
     app_password: str
@@ -24,6 +40,8 @@ class Config:
     port: int = 8000
     max_attachment_bytes: int = 15 * 1024 * 1024
     max_attachment_chars: int = 50_000
+    gmail_address: str = ""
+    gmail_app_password: str = ""
 
     @property
     def from_address(self) -> str:
@@ -33,6 +51,17 @@ class Config:
     def mail_login(self) -> str:
         """Gebruikersnaam voor IMAP/SMTP: standaard het volledige mailadres."""
         return self.mail_user or self.from_address
+
+    def mail_account(self, name: str = "icloud") -> MailAccount:
+        if name == "gmail":
+            if not (self.gmail_address and self.gmail_app_password):
+                raise RuntimeError("Gmail is niet ingesteld (GMAIL_ADDRESS en GMAIL_APP_PASSWORD)")
+            return MailAccount("gmail", self.gmail_address, self.gmail_app_password, self.gmail_address,
+                               "imap.gmail.com", 993, "smtp.gmail.com", 587, "[Gmail]/Trash", gmail=True)
+        if name != "icloud":
+            raise RuntimeError(f"Onbekend account: {name} (kies icloud of gmail)")
+        return MailAccount("icloud", self.mail_login, self.app_password, self.from_address,
+                           self.imap_host, self.imap_port, self.smtp_host, self.smtp_port, "Deleted Messages")
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -65,4 +94,7 @@ class Config:
             port=int(os.environ.get("MCP_PORT", "8000")),
             max_attachment_bytes=int(os.environ.get("MCP_MAX_ATTACHMENT_MB", "15")) * 1024 * 1024,
             max_attachment_chars=int(os.environ.get("MCP_MAX_ATTACHMENT_CHARS", "50000")),
+            gmail_address=os.environ.get("GMAIL_ADDRESS", "").strip(),
+            # Google toont app-wachtwoorden met spaties; die horen er niet bij.
+            gmail_app_password=os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "").strip(),
         )

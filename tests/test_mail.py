@@ -109,3 +109,44 @@ def test_login_uses_mail_address_not_apple_id(monkeypatch):
     client.list_folders()
     assert logins == ["dieter@icloud.com"]
     assert client.build_message("a@b.be", "s", "b")["From"] == "dieter@icloud.com"
+
+
+@pytest.fixture
+def gmail(monkeypatch):
+    fake = FakeIMAP()
+    hosts = []
+    monkeypatch.setattr(mail_module.imaplib, "IMAP4_SSL", lambda *a: hosts.append(a) or fake)
+    config = Config("a@icloud.com", "pw", "https://x.example", "een-lang-wachtwoord", gmail_address="me@gmail.com", gmail_app_password="abcd")
+    c = MailClient(config, "gmail")
+    c.fake, c.hosts = fake, hosts
+    return c
+
+
+def test_gmail_account_uses_gmail_host_and_address(gmail):
+    gmail.list_folders()
+    assert gmail.hosts == [("imap.gmail.com", 993)]
+    assert gmail.build_message("a@b.be", "s", "b")["From"] == "me@gmail.com"
+
+
+def test_gmail_search_syntax_uses_x_gm_raw(gmail):
+    gmail.search("[Gmail]/All Mail", "gmail:has:attachment filename:pdf")
+    search = next(c for c in gmail.fake.calls if c[0] == "SEARCH")
+    assert search[1] == (None, "X-GM-RAW", '"has:attachment filename:pdf"')
+
+
+def test_gmail_trash_in_all_mail_does_not_expunge(gmail):
+    gmail.move_to_trash("1", "[Gmail]/All Mail")
+    kinds = [c[0] for c in gmail.fake.calls]
+    assert "COPY" in kinds and "expunge" not in kinds
+    assert next(c for c in gmail.fake.calls if c[0] == "COPY")[1][1] == '"[Gmail]/Trash"'
+
+
+def test_gmail_not_configured_raises():
+    with pytest.raises(RuntimeError, match="Gmail is niet ingesteld"):
+        MailClient(Config("a@icloud.com", "pw", "https://x.example", "een-lang-wachtwoord"), "gmail")
+
+
+def test_gmail_app_password_spaces_are_stripped(monkeypatch):
+    for k, v in {"MCP_OWNER_PASSWORD": "een-lang-wachtwoord", "ICLOUD_APPLE_ID": "a@b.be", "ICLOUD_APP_PASSWORD": "x", "MCP_PUBLIC_URL": "https://x.example", "GMAIL_ADDRESS": "me@gmail.com", "GMAIL_APP_PASSWORD": "abcd efgh ijkl mnop"}.items():
+        monkeypatch.setenv(k, v)
+    assert Config.from_env().gmail_app_password == "abcdefghijklmnop"

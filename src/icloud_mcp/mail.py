@@ -1,4 +1,4 @@
-"""iCloud Mail via IMAP/SMTP (standaardbibliotheek, geen extra afhankelijkheden)."""
+"""iCloud Mail en Gmail via IMAP/SMTP (standaardbibliotheek, geen extra afhankelijkheden)."""
 import email
 import imaplib
 import smtplib
@@ -13,14 +13,15 @@ MAX_BODY_CHARS = 20_000
 
 
 class MailClient:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, account: str = "icloud"):
         self.config = config
+        self.account = config.mail_account(account)
 
     @contextmanager
     def _imap(self):
-        conn = imaplib.IMAP4_SSL(self.config.imap_host, self.config.imap_port)
+        conn = imaplib.IMAP4_SSL(self.account.imap_host, self.account.imap_port)
         try:
-            conn.login(self.config.mail_login, self.config.app_password)
+            conn.login(self.account.login, self.account.password)
             yield conn
         finally:
             try:
@@ -56,7 +57,11 @@ class MailClient:
             status, _ = conn.select(self._quote(folder), readonly=True)
             if status != "OK":
                 raise RuntimeError(f"Map niet gevonden: {folder}")
-            status, data = conn.uid("SEARCH", None, query)
+            if self.account.gmail and query.lower().startswith("gmail:"):
+                # Gmail-zoeksyntax, bv. `gmail:has:attachment filename:pdf from:school newer_than:30d`.
+                status, data = conn.uid("SEARCH", None, "X-GM-RAW", self._quote(query[6:].strip()))
+            else:
+                status, data = conn.uid("SEARCH", None, query)
             if status != "OK":
                 raise RuntimeError("Ongeldige zoekopdracht")
             uids = data[0].split()[-limit:][::-1]
@@ -165,7 +170,8 @@ class MailClient:
             if status != "OK":
                 raise RuntimeError("Vlag wijzigen mislukt")
 
-    def move_to_trash(self, uid: str, folder: str = "INBOX", trash: str = "Deleted Messages") -> None:
+    def move_to_trash(self, uid: str, folder: str = "INBOX", trash: str = "") -> None:
+        trash = trash or self.account.trash
         with self._imap() as conn:
             status, _ = conn.select(self._quote(folder))
             if status != "OK":
@@ -173,18 +179,21 @@ class MailClient:
             status, _ = conn.uid("COPY", uid, self._quote(trash))
             if status != "OK":
                 raise RuntimeError(f"Verplaatsen naar {trash} mislukt")
+            # In Gmail's "All Mail" zou expunge het bericht definitief verwijderen; daar volstaat de kopie in de prullenmand.
+            if self.account.gmail and folder == "[Gmail]/All Mail":
+                return
             conn.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
             conn.expunge()
 
     def build_message(self, to: str, subject: str, body: str, cc: str = "", reply_to_uid: str = "", folder: str = "INBOX") -> EmailMessage:
         msg = EmailMessage()
-        msg["From"] = self.config.from_address
+        msg["From"] = self.account.address
         msg["To"] = to
         if cc:
             msg["Cc"] = cc
         msg["Subject"] = subject
         msg["Date"] = formatdate(localtime=True)
-        msg["Message-ID"] = make_msgid(domain=self.config.from_address.split("@")[-1])
+        msg["Message-ID"] = make_msgid(domain=self.account.address.split("@")[-1])
         if reply_to_uid:
             original = self.read(reply_to_uid, folder)
             if original["message_id"]:
@@ -195,7 +204,7 @@ class MailClient:
 
     def send(self, msg: EmailMessage) -> None:
         recipients = [a for field in ("To", "Cc") if msg[field] for a in msg[field].split(",")]
-        with smtplib.SMTP(self.config.smtp_host, self.config.smtp_port, timeout=30) as smtp:
+        with smtplib.SMTP(self.account.smtp_host, self.account.smtp_port, timeout=30) as smtp:
             smtp.starttls()
-            smtp.login(self.config.mail_login, self.config.app_password)
+            smtp.login(self.account.login, self.account.password)
             smtp.send_message(msg, to_addrs=[a.strip() for a in recipients])

@@ -215,3 +215,22 @@ def test_audit_log_never_contains_arguments(client, caplog):
     rpc(client, "tools/call", {"name": "mail_send", "arguments": {"to": "geheim@voorbeeld.be", "subject": "GEHEIMONDERWERP", "body": "x"}}, id=2)
     assert "tool mail_send ok" in caplog.text
     assert "geheim@voorbeeld.be" not in caplog.text and "GEHEIMONDERWERP" not in caplog.text
+
+
+def test_account_selects_mailbox_and_gmail_must_be_configured(fake, tmp_path):
+    gmail_fake = FakeMail()
+    gmail_fake.list_folders = lambda: ["[Gmail]/All Mail"]
+    init = ("initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
+    config = Config("a@icloud.com", "pw", PUBLIC, PASSWORD, TOKEN, data_dir=str(tmp_path))
+    call = {"name": "mail_list_folders", "arguments": {"account": "gmail"}}
+    with TestClient(build_app(config, fake, None, gmail_fake)) as c:
+        rpc(c, *init)
+        assert "All Mail" in rpc(c, "tools/call", call, id=2)["result"]["content"][0]["text"]
+        assert "INBOX" in rpc(c, "tools/call", {"name": "mail_list_folders", "arguments": {}}, id=3)["result"]["content"][0]["text"]
+        trash = {"name": "mail_trash", "arguments": {"uid": "5", "confirm": True, "account": "gmail"}}
+        rpc(c, "tools/call", trash, id=4)
+        assert gmail_fake.trashed == [("5", "INBOX")] and fake.trashed == []
+    with TestClient(build_app(config, fake)) as c:
+        rpc(c, *init)
+        out = rpc(c, "tools/call", call, id=2)["result"]
+        assert out["isError"] and "Gmail is niet ingesteld" in out["content"][0]["text"]

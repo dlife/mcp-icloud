@@ -9,6 +9,12 @@ Wat er bewust **niet** in zit: Herinneringen (Structured doet dat), Foto's (Syno
 `mail_list_folders`, `mail_search`, `mail_read`, `mail_attachment`, `mail_send`, `mail_mark`, `mail_trash`.
 
 `mail_read` toont per bijlage een `index`; `mail_attachment` haalt daarmee de tekst uit PDF, Word, Excel, PowerPoint en tekstbestanden (alleen lezen, in het geheugen, niets op schijf). Scans en afbeeldingen geven een uitleg in `note`; OCR volgt later. Grenzen via `MCP_MAX_ATTACHMENT_MB` (standaard 15) en `MCP_MAX_ATTACHMENT_CHARS` (standaard 50000).
+
+### Gmail
+Alle mailtools hebben een argument `account` (`icloud`, standaard, of `gmail`). Gmail werkt via IMAP/SMTP met een app-wachtwoord: zet `GMAIL_ADDRESS` en `GMAIL_APP_PASSWORD` in `.env` en herstart met `--force-recreate`. Zonder die variabelen geeft `account=gmail` een duidelijke foutmelding.
+Alle mail staat in `[Gmail]/All Mail`. Zoeken kan met Gmail-syntax door de zoekopdracht met `gmail:` te laten beginnen, bv. `gmail:has:attachment filename:pdf newer_than:30d`.
+Versturen en verwijderen vragen ook voor Gmail `confirm=true`. Het app-wachtwoord geeft toegang tot de hele mailbox: bewaar `.env` zoals het iCloud-wachtwoord en trek het in bij twijfel.
+
 Agenda: `agenda_list_calendars`, `agenda_list_events`, `agenda_create_event`, `agenda_delete_event` (CalDAV met je Apple-ID en app-specifiek wachtwoord).
 `mail_send`, `mail_trash`, `agenda_create_event` en `agenda_delete_event` doen niets zonder `confirm=true`; zonder krijg je een voorbeeld terug.
 

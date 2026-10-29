@@ -12,7 +12,7 @@ Wat er bewust **niet** in zit: Herinneringen (Structured doet dat), Foto's (Syno
 
 ### Gmail
 Alle mailtools hebben een argument `account` (`icloud`, standaard, of `gmail`). Gmail werkt via IMAP/SMTP met een app-wachtwoord: zet `GMAIL_ADDRESS` en `GMAIL_APP_PASSWORD` in `.env` en herstart met `--force-recreate`. Zonder die variabelen geeft `account=gmail` een duidelijke foutmelding.
-Alle mail staat in `[Gmail]/All Mail`. Zoeken kan met Gmail-syntax door de zoekopdracht met `gmail:` te laten beginnen, bv. `gmail:has:attachment filename:pdf newer_than:30d`.
+Alle mail staat in één map waarvan de naam van de taal afhangt (`[Gmail]/All Mail`, `[Gmail]/Alle e-mail`); `mail_list_folders` toont hem. De prullenbak wordt automatisch gevonden. Zoeken kan met Gmail-syntax door de zoekopdracht met `gmail:` te laten beginnen, bv. `gmail:has:attachment filename:pdf newer_than:30d`.
 Versturen en verwijderen vragen ook voor Gmail `confirm=true`. Het app-wachtwoord geeft toegang tot de hele mailbox: bewaar `.env` zoals het iCloud-wachtwoord en trek het in bij twijfel.
 
 Agenda: `agenda_list_calendars`, `agenda_list_events`, `agenda_create_event`, `agenda_delete_event` (CalDAV met je Apple-ID en app-specifiek wachtwoord).

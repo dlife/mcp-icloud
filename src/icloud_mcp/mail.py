@@ -170,9 +170,24 @@ class MailClient:
             if status != "OK":
                 raise RuntimeError("Vlag wijzigen mislukt")
 
+    @staticmethod
+    def _special_folder(conn, flag: str) -> str | None:
+        """Zoek een map via haar IMAP-kenmerk (bv. \\Trash of \\All); namen zijn per taal anders."""
+        status, data = conn.list()
+        if status != "OK":
+            return None
+        for raw in data:
+            line = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+            if flag in line.split(")", 1)[0].split():
+                return line.rsplit(' "/" ', 1)[-1].strip().strip('"')
+        return None
+
     def move_to_trash(self, uid: str, folder: str = "INBOX", trash: str = "") -> None:
-        trash = trash or self.account.trash
         with self._imap() as conn:
+            if not trash:
+                # Gmail noemt de prullenbak naar de taal van het account ("[Gmail]/Prullenbak"), dus via het kenmerk zoeken.
+                trash = (self._special_folder(conn, "\\Trash") if self.account.gmail else None) or self.account.trash
+            all_mail = self._special_folder(conn, "\\All") if self.account.gmail else None
             status, _ = conn.select(self._quote(folder))
             if status != "OK":
                 raise RuntimeError(f"Map niet gevonden: {folder}")
@@ -180,7 +195,7 @@ class MailClient:
             if status != "OK":
                 raise RuntimeError(f"Verplaatsen naar {trash} mislukt")
             # In Gmail's "All Mail" zou expunge het bericht definitief verwijderen; daar volstaat de kopie in de prullenmand.
-            if self.account.gmail and folder == "[Gmail]/All Mail":
+            if self.account.gmail and folder == all_mail:
                 return
             conn.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
             conn.expunge()

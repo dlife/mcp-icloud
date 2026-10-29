@@ -134,11 +134,19 @@ def test_gmail_search_syntax_uses_x_gm_raw(gmail):
     assert search[1] == (None, "X-GM-RAW", '"has:attachment filename:pdf"')
 
 
-def test_gmail_trash_in_all_mail_does_not_expunge(gmail):
-    gmail.move_to_trash("1", "[Gmail]/All Mail")
+def test_gmail_trash_uses_localized_special_folders(gmail):
+    gmail.fake.list = lambda: ("OK", [
+        b'(\\HasNoChildren) "/" "INBOX"',
+        b'(\\HasNoChildren \\All) "/" "[Gmail]/Alle e-mail"',
+        b'(\\HasNoChildren \\Trash) "/" "[Gmail]/Prullenbak"',
+    ])
+    gmail.move_to_trash("1", "[Gmail]/Alle e-mail")
     kinds = [c[0] for c in gmail.fake.calls]
     assert "COPY" in kinds and "expunge" not in kinds
-    assert next(c for c in gmail.fake.calls if c[0] == "COPY")[1][1] == '"[Gmail]/Trash"'
+    assert next(c for c in gmail.fake.calls if c[0] == "COPY")[1][1] == '"[Gmail]/Prullenbak"'
+    gmail.fake.calls.clear()
+    gmail.move_to_trash("2", "INBOX")
+    assert "expunge" in [c[0] for c in gmail.fake.calls]
 
 
 def test_gmail_not_configured_raises():

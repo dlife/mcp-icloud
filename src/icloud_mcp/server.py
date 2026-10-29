@@ -87,13 +87,13 @@ def build_server(config: Config, mail: MailClient | None = None, agenda: AgendaC
     @mcp.tool()
     @audited
     def mail_list_folders(account: str = "icloud") -> list[str]:
-        """Geef alle mailmappen van een mailaccount. Gmail: alle mail zit in [Gmail]/All Mail.  `account` is icloud (standaard) of gmail."""
+        """Geef alle mailmappen van een mailaccount. Gmail: alle mail zit in de map "Alle e-mail" (naam hangt van de taal af, zie deze lijst).  `account` is icloud (standaard) of gmail."""
         return mailbox(account).list_folders()
 
     @mcp.tool()
     @audited
     def mail_search(folder: str = "INBOX", query: str = "ALL", limit: int = 20, account: str = "icloud") -> list[dict]:
-        """Zoek mails in een map, nieuwste eerst. `query` is een IMAP-zoekopdracht, bv. UNSEEN, FROM "jan", SUBJECT "factuur", SINCE 01-Oct-2026. Bij Gmail kan ook Gmail-syntax: begin met `gmail:`, bv. `gmail:has:attachment filename:pdf newer_than:30d` (zoek dan in [Gmail]/All Mail). Max 100 resultaten.  `account` is icloud (standaard) of gmail."""
+        """Zoek mails in een map, nieuwste eerst. `query` is een IMAP-zoekopdracht, bv. UNSEEN, FROM "jan", SUBJECT "factuur", SINCE 01-Oct-2026. Bij Gmail kan ook Gmail-syntax: begin met `gmail:`, bv. `gmail:has:attachment filename:pdf newer_than:30d` (zoek dan in de map met alle mail, bv. [Gmail]/All Mail of [Gmail]/Alle e-mail; zie mail_list_folders). Max 100 resultaten.  `account` is icloud (standaard) of gmail."""
         return mailbox(account).search(folder, query, limit)
 
     @mcp.tool()

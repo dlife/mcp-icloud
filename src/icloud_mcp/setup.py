@@ -107,6 +107,8 @@ def render_env(v: dict[str, str]) -> str:
         "",
         f"GMAIL_ADDRESS={v.get('GMAIL_ADDRESS', '')}",
         f"GMAIL_APP_PASSWORD={v.get('GMAIL_APP_PASSWORD', '')}",
+        f"FASTMAIL_API_TOKEN={v.get('FASTMAIL_API_TOKEN', '')}",
+        f"FASTMAIL_ADDRESS={v.get('FASTMAIL_ADDRESS', '')}",
         "",
         f"ICLOUD_TIMEZONE={v['ICLOUD_TIMEZONE']}",
         f"MCP_PUBLIC_URL={v['MCP_PUBLIC_URL']}",

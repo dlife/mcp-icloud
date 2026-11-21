@@ -6,7 +6,7 @@ Wat er bewust **niet** in zit: Herinneringen (Structured doet dat), Foto's (Syno
 (geen officiële API en geen app-specifiek wachtwoord; de pc kopieert de map met `robocopy` naar een NAS-share).
 
 ## Tools
-`mail_list_folders`, `mail_search`, `mail_read`, `mail_attachment`, `mail_send`, `mail_mark`, `mail_trash`.
+`mail_list_folders`, `mail_search`, `mail_read`, `mail_attachment`, `mail_send`, `mail_mark`, `mail_move`, `mail_spam`, `mail_trash`.
 
 `mail_read` toont per bijlage een `index`; `mail_attachment` haalt daarmee de tekst uit PDF, Word, Excel, PowerPoint en tekstbestanden (alleen lezen, in het geheugen, niets op schijf). Scans en afbeeldingen geven een uitleg in `note`; OCR volgt later. Grenzen via `MCP_MAX_ATTACHMENT_MB` (standaard 15) en `MCP_MAX_ATTACHMENT_CHARS` (standaard 50000).
 
@@ -15,8 +15,12 @@ Alle mailtools hebben een argument `account` (`icloud`, standaard, of `gmail`). 
 Alle mail staat in één map waarvan de naam van de taal afhangt (`[Gmail]/All Mail`, `[Gmail]/Alle e-mail`); `mail_list_folders` toont hem. De prullenbak wordt automatisch gevonden. Zoeken kan met Gmail-syntax door de zoekopdracht met `gmail:` te laten beginnen, bv. `gmail:has:attachment filename:pdf newer_than:30d`.
 Versturen en verwijderen vragen ook voor Gmail `confirm=true`. Het app-wachtwoord geeft toegang tot de hele mailbox: bewaar `.env` zoals het iCloud-wachtwoord en trek het in bij twijfel.
 
+### Fastmail
+`account=fastmail` werkt via JMAP (HTTPS) met een API-token, niet via IMAP. Zet `FASTMAIL_API_TOKEN` (en eventueel `FASTMAIL_ADDRESS`) in `.env` en herstart met `--force-recreate`. Maak het token in Fastmail onder Instellingen > Privacy en beveiliging > Integraties met schrijfrechten voor Mail en E-mail verzenden. Alle mailtools werken, ook bijlagen lezen.
+`uid` is het JMAP-id; mappen zijn namen of paden uit `mail_list_folders` (ook Fastmail-labels). Zoeken kan met dezelfde IMAP-achtige opdrachten (`UNSEEN`, `FROM "jan"`, `SUBJECT "factuur"`, `SINCE 01-Oct-2026`, `HASATTACHMENT`); losse woorden zoeken in de hele mail en `folder="*"` zoekt overal. `mail_spam` zet een mail in Junk en leert zo het spamfilter van Fastmail; `mail_move` verplaatst naar een andere map.
+
 Agenda: `agenda_list_calendars`, `agenda_list_events`, `agenda_create_event`, `agenda_delete_event` (CalDAV met je Apple-ID en app-specifiek wachtwoord).
-`mail_send`, `mail_trash`, `agenda_create_event` en `agenda_delete_event` doen niets zonder `confirm=true`; zonder krijg je een voorbeeld terug.
+`mail_send`, `mail_trash`, `mail_move`, `mail_spam`, `agenda_create_event` en `agenda_delete_event` doen niets zonder `confirm=true`; zonder krijg je een voorbeeld terug.
 
 ## Snel starten
 Je hebt nodig: een machine die 24/7 aanstaat met Docker (NAS, Raspberry Pi, kleine server), een eigen domeinnaam, en een iCloud-account met een [app-specifiek wachtwoord](https://account.apple.com).

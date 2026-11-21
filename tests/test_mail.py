@@ -158,3 +158,17 @@ def test_gmail_app_password_spaces_are_stripped(monkeypatch):
     for k, v in {"MCP_OWNER_PASSWORD": "een-lang-wachtwoord", "ICLOUD_APPLE_ID": "a@b.be", "ICLOUD_APP_PASSWORD": "x", "MCP_PUBLIC_URL": "https://x.example", "GMAIL_ADDRESS": "me@gmail.com", "GMAIL_APP_PASSWORD": "abcd efgh ijkl mnop"}.items():
         monkeypatch.setenv(k, v)
     assert Config.from_env().gmail_app_password == "abcdefghijklmnop"
+
+
+def test_move_copies_then_deletes(client):
+    client.move("7", "INBOX", "Archief")
+    assert ("COPY", ("7", '"Archief"')) in client.fake.calls
+    assert ("STORE", ("7", "+FLAGS", "(\\Deleted)")) in client.fake.calls
+    assert ("expunge",) in client.fake.calls
+
+
+def test_mark_spam_uses_junk_folder_and_not_spam_goes_to_inbox(client):
+    client.mark_spam("7", "INBOX")
+    assert ("COPY", ("7", '"Junk"')) in client.fake.calls
+    client.mark_spam("7", "Junk", spam=False)
+    assert ("COPY", ("7", '"INBOX"')) in client.fake.calls

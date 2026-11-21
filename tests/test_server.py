@@ -36,6 +36,12 @@ class FakeMail:
     def move_to_trash(self, uid, folder):
         self.trashed.append((uid, folder))
 
+    def move(self, uid, folder, target):
+        self.moved = getattr(self, "moved", []) + [(uid, folder, target)]
+
+    def mark_spam(self, uid, folder, spam):
+        self.spammed = getattr(self, "spammed", []) + [(uid, folder, spam)]
+
     def get_attachment(self, uid, index, folder):
         return "n.txt", "text/plain", b"x" * 100
 
@@ -74,7 +80,7 @@ def test_mcp_requires_token(client):
 def test_lists_mail_tools(client):
     rpc(client, "initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
     names = {t["name"] for t in rpc(client, "tools/list", id=2)["result"]["tools"]}
-    assert {"mail_list_folders", "mail_search", "mail_read", "mail_send", "mail_mark", "mail_trash", "mail_attachment"} <= names
+    assert {"mail_list_folders", "mail_search", "mail_read", "mail_send", "mail_mark", "mail_trash", "mail_attachment", "mail_move", "mail_spam"} <= names
 
 
 def test_send_needs_confirmation(client, fake):
@@ -93,6 +99,30 @@ def test_trash_needs_confirmation(client, fake):
     assert fake.trashed == []
     rpc(client, "tools/call", {"name": "mail_trash", "arguments": {"uid": "5", "confirm": True}}, id=3)
     assert fake.trashed == [("5", "INBOX")]
+
+
+def test_move_and_spam_need_confirmation(client, fake):
+    rpc(client, "initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
+    rpc(client, "tools/call", {"name": "mail_move", "arguments": {"uid": "5", "target": "Archief"}}, id=2)
+    rpc(client, "tools/call", {"name": "mail_spam", "arguments": {"uid": "5"}}, id=3)
+    assert not hasattr(fake, "moved") and not hasattr(fake, "spammed")
+    rpc(client, "tools/call", {"name": "mail_move", "arguments": {"uid": "5", "target": "Archief", "confirm": True}}, id=4)
+    rpc(client, "tools/call", {"name": "mail_spam", "arguments": {"uid": "5", "confirm": True}}, id=5)
+    assert fake.moved == [("5", "INBOX", "Archief")] and fake.spammed == [("5", "INBOX", True)]
+
+
+def test_fastmail_account_is_routed_and_unconfigured_is_clear(fake, tmp_path):
+    other = FakeMail()
+    config = Config("a@icloud.com", "pw", PUBLIC, PASSWORD, TOKEN, data_dir=str(tmp_path))
+    init = ("initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
+    with TestClient(build_app(config, fake, fastmail=other)) as c:
+        rpc(c, *init)
+        rpc(c, "tools/call", {"name": "mail_trash", "arguments": {"uid": "9", "confirm": True, "account": "fastmail"}}, id=2)
+    assert other.trashed == [("9", "INBOX")] and fake.trashed == []
+    with TestClient(build_app(config, fake)) as c:
+        rpc(c, *init)
+        text = rpc(c, "tools/call", {"name": "mail_list_folders", "arguments": {"account": "fastmail"}}, id=2)["result"]["content"][0]["text"]
+        assert "FASTMAIL_API_TOKEN" in text
 
 
 def test_attachment_tool_reads_text_and_respects_limits(fake, tmp_path):

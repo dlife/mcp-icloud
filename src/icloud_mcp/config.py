@@ -42,6 +42,10 @@ class Config:
     max_attachment_chars: int = 50_000
     gmail_address: str = ""
     gmail_app_password: str = ""
+    # Fastmail werkt via JMAP met een API-token (geen IMAP); het adres is optioneel (anders de eerste identiteit).
+    fastmail_api_token: str = ""
+    fastmail_address: str = ""
+    fastmail_session_url: str = "https://api.fastmail.com/jmap/session"
 
     @property
     def from_address(self) -> str:
@@ -59,7 +63,7 @@ class Config:
             return MailAccount("gmail", self.gmail_address, self.gmail_app_password, self.gmail_address,
                                "imap.gmail.com", 993, "smtp.gmail.com", 587, "[Gmail]/Trash", gmail=True)
         if name != "icloud":
-            raise RuntimeError(f"Onbekend account: {name} (kies icloud of gmail)")
+            raise RuntimeError(f"Onbekend account: {name} (kies icloud, gmail of fastmail)")
         return MailAccount("icloud", self.mail_login, self.app_password, self.from_address,
                            self.imap_host, self.imap_port, self.smtp_host, self.smtp_port, "Deleted Messages")
 
@@ -97,4 +101,7 @@ class Config:
             gmail_address=os.environ.get("GMAIL_ADDRESS", "").strip(),
             # Google toont app-wachtwoorden met spaties; die horen er niet bij.
             gmail_app_password=os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "").strip(),
+            fastmail_api_token=os.environ.get("FASTMAIL_API_TOKEN", "").strip(),
+            fastmail_address=os.environ.get("FASTMAIL_ADDRESS", "").strip(),
+            fastmail_session_url=os.environ.get("FASTMAIL_JMAP_URL", "https://api.fastmail.com/jmap/session").strip(),
         )

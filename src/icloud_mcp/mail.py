@@ -200,6 +200,29 @@ class MailClient:
             conn.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
             conn.expunge()
 
+    def move(self, uid: str, folder: str, target: str) -> None:
+        """Verplaats een mail naar een andere map. Bij Gmail is de map met alle mail een label-weergave: daar wordt alleen gekopieerd (label toevoegen)."""
+        with self._imap() as conn:
+            all_mail = self._special_folder(conn, "\\All") if self.account.gmail else None
+            status, _ = conn.select(self._quote(folder))
+            if status != "OK":
+                raise RuntimeError(f"Map niet gevonden: {folder}")
+            status, _ = conn.uid("COPY", uid, self._quote(target))
+            if status != "OK":
+                raise RuntimeError(f"Verplaatsen naar {target} mislukt")
+            if self.account.gmail and folder == all_mail:
+                return
+            conn.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
+            conn.expunge()
+
+    def mark_spam(self, uid: str, folder: str = "INBOX", spam: bool = True) -> None:
+        """Spam: naar de spam-map (via het \\Junk-kenmerk, anders "Junk"). Geen spam: terug naar INBOX."""
+        if not spam:
+            return self.move(uid, folder, "INBOX")
+        with self._imap() as conn:
+            junk = self._special_folder(conn, "\\Junk") or "Junk"
+        self.move(uid, folder, junk)
+
     def build_message(self, to: str, subject: str, body: str, cc: str = "", reply_to_uid: str = "", folder: str = "INBOX") -> EmailMessage:
         msg = EmailMessage()
         msg["From"] = self.account.address
